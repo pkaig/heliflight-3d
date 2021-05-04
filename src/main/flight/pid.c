@@ -76,6 +76,9 @@ FAST_RAM_ZERO_INIT float delayCompSum[3] = {0.0f};
 FAST_RAM_ZERO_INIT float delayCompAlpha = 0.0f; */
 // End inits for PID Delay Compensation
 
+// HF3D
+uint16_t RescueDelay = 0;   //HF3D For Non inverted rescue
+
 const char pidNames[] =
     "ROLL;"
     "PITCH;"
@@ -895,16 +898,18 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
         //   but the control direction needed to get to up-right is different than inverted
         // Determine if we're closer to up-right or inverted by checking for abs(roll attitude) > 90
         // HF3D TODO:  Evaluate using hysteresis to ensure we don't get "stuck" at one of the inflection points below.
-        if (((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > 90.0f) {
+        if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > 90.0f) && (RescueDelay < 16000)) {
             // Rolled right closer to inverted, continue to roll right to inverted (+180 degrees)
+			RescueDelay++;				//HF3D Non inverted rescue
             if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
                 errorAngle = 180.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             }
-        } else if (((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < -90.0f) {    
+        } else if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < -90.0f) && (RescueDelay < 16000)) {    
             // Rolled left closer to inverted, continue to roll left to inverted (-180 degrees)
-            if (axis == FD_PITCH) {
+			RescueDelay++;				//HF3D Non inverted rescue 
+			if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
                 errorAngle = -180.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
@@ -932,8 +937,8 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
         // calculate error angle and limit the angle to the max inclination
         // rcDeflection is in range [-1.0, 1.0]
         float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
-
-        // HF3D TODO:  Think about fixing GPS rescue for level/inverted rescue... probably just need to only make it worth it non-inverted rescue
+				
+		// HF3D TODO:  Think about fixing GPS rescue for level/inverted rescue... probably just need to only make it worth it non-inverted rescue
 #ifdef USE_GPS_RESCUE
         angle += gpsRescueAngle[axis] / 100; // ANGLE IS IN CENTIDEGREES
 #endif
@@ -1510,6 +1515,9 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
     // ----------PID controller----------
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
 
+		if (!FLIGHT_MODE(ANGLE_MODE)) { //HF3D Non inverted rescue reset
+			RescueDelay = 0;	
+		}
         // Get the user's roll rate command on this axis after expo and other rate modifications have been made
         //  Units are deg/s... maximum set in profile, default max rate is 1998 deg/s
         float currentPidSetpoint = getSetpointRate(axis);
