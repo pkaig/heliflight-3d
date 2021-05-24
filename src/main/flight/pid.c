@@ -77,7 +77,10 @@ FAST_RAM_ZERO_INIT float delayCompAlpha = 0.0f; */
 // End inits for PID Delay Compensation
 
 // HF3D
-uint16_t RescueDelay = 0;   //HF3D For Non inverted rescue
+uint16_t 	RescueDelay = 16050;   //HF3D For Non inverted rescue
+uint16_t 	RescueDelayCurrent = 0;
+static 		float 		Rescue_Invert = 0.0;
+static 		FAST_RAM float RescueOffset = 0.0f;
 
 const char pidNames[] =
     "ROLL;"
@@ -240,6 +243,7 @@ void resetPidProfile(pidProfile_t *pidProfile)
         .elevator_filter_window_time = 75,
         .elevator_filter_window_size = 30,
         .elevator_filter_hz = 15,
+		.Rescue_delay = 8000,          // Non Inverted rescue
     );
 #ifndef USE_D_MIN
     pidProfile->pid[PID_ROLL].D = 30;
@@ -786,6 +790,7 @@ void pidInitConfig(const pidProfile_t *pidProfile)
 
     // HF3D
     rescueCollective = pidProfile->rescue_collective;
+	RescueDelay = pidProfile->Rescue_delay;
 }
 
 void pidInit(const pidProfile_t *pidProfile)
@@ -897,18 +902,17 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
         // We are always pitching to "zero" whether up-right or inverted
         //   but the control direction needed to get to up-right is different than inverted
         // Determine if we're closer to up-right or inverted by checking for abs(roll attitude) > 90
-        // HF3D TODO:  Evaluate using hysteresis to ensure we don't get "stuck" at one of the inflection points below.
-        if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > 90.0f) && (RescueDelay < 16000)) {
-            // Rolled right closer to inverted, continue to roll right to inverted (+180 degrees)
-			RescueDelay++;				//HF3D Non inverted rescue
+        if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > (90.0f - RescueOffset)) &! Rescue_Invert) {
+            RescueOffset = 5.0f;
+			// Rolled right closer to inverted, continue to roll right to inverted (+180 degrees)
             if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
                 errorAngle = 180.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             }
-        } else if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < -90.0f) && (RescueDelay < 16000)) {    
+        } else if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < (-90.0f + RescueOffset)) &! Rescue_Invert) {
+			RescueOffset = 5.0f;	
             // Rolled left closer to inverted, continue to roll left to inverted (-180 degrees)
-			RescueDelay++;				//HF3D Non inverted rescue 
 			if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
@@ -916,19 +920,18 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
             }
         } else {
             // We're rolled left or right between -90 and 90, and thus are closer to up-right (0 degrees aka skids down)
-            if (axis == FD_PITCH) {
+			// If we are inverted and Rescue_Invert active. Pitch will be 0 and roll +-180 so we will roll to upright.....
+            RescueOffset = -5.0f;
+			if (axis == FD_PITCH) {
                 errorAngle = 0.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
                 errorAngle = 0.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             }
         }
-        // NOTE:  If you want to level to only up-right, it would probably be best to just level inverted and
-        //   then flip to upright later on.
-        //   But if you really can only level to up-right (no negative collective avaiable), then it's probably
-        //     best to flip use the pitch direction logic above but just always roll back to up-right.
-        //   That way you will be putting in the correct pitch direction while you're inverted also.  Otherwise
-        //     you will be putting in the wrong pitch correction during the time you're inverted.  Not good, especially
-        //     since "roll" gets wonky near straight up/down.
+        // NOTE: With each cycle in ANGLE mode increment the counter. When count is > than RescueDelay 
+		// we set Rescue_Invert to True. This disables the level inverted component. As we should be at pitch near 0 and 
+		// roll near +-180 the heli will start to roll to level
+		
         currentPidSetpoint = errorAngle * levelGain;   
         return currentPidSetpoint;
 
@@ -1515,8 +1518,16 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
     // ----------PID controller----------
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
 
-		if (!FLIGHT_MODE(ANGLE_MODE)) { //HF3D Non inverted rescue reset
-			RescueDelay = 0;	
+		if (!FLIGHT_MODE(ANGLE_MODE)||(RescueDelay > 16000)) { //HF3D Non inverted rescue
+			RescueDelayCurrent = 0;
+			Rescue_Invert = 0.0;
+			RescueOffset = 0.0f;
+		} else {
+			RescueDelayCurrent++;
+			if (RescueDelayCurrent >= RescueDelay) {
+				RescueDelayCurrent = RescueDelay;
+				Rescue_Invert = 1.0;				
+			}
 		}
         // Get the user's roll rate command on this axis after expo and other rate modifications have been made
         //  Units are deg/s... maximum set in profile, default max rate is 1998 deg/s
