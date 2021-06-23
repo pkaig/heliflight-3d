@@ -1,0 +1,11 @@
+###############################
+
+List of stuff I want to work out.
+
+1. Non inverted rescue mode							| done
+2. Dynamic inverted rescue delay/gyro frequency 	| done
+2. Rate limit collective for rescue					| Started
+3. Dynamic RPM Rescue collective 					| not started		
+4. 
+
+###############################

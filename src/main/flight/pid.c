@@ -76,12 +76,6 @@ FAST_RAM_ZERO_INIT float delayCompSum[3] = {0.0f};
 FAST_RAM_ZERO_INIT float delayCompAlpha = 0.0f; */
 // End inits for PID Delay Compensation
 
-// HF3D
-uint16_t 	RescueDelay = 16050;   //HF3D For Non inverted rescue
-uint16_t 	RescueDelayCurrent = 0;
-static 		float 		Rescue_Invert = 0.0;
-static 		FAST_RAM float RescueOffset = 0.0f;
-
 const char pidNames[] =
     "ROLL;"
     "PITCH;"
@@ -243,7 +237,7 @@ void resetPidProfile(pidProfile_t *pidProfile)
         .elevator_filter_window_time = 75,
         .elevator_filter_window_size = 30,
         .elevator_filter_hz = 15,
-		.Rescue_delay = 8000,          // Non Inverted rescue
+		.rescue_delay = 35,          // Non Inverted rescue: disabled by default
     );
 #ifndef USE_D_MIN
     pidProfile->pid[PID_ROLL].D = 30;
@@ -303,6 +297,7 @@ static FAST_RAM_ZERO_INIT filterApplyFnPtr dtermLowpass2ApplyFn;
 static FAST_RAM_ZERO_INIT dtermLowpass_t dtermLowpass2[XYZ_AXIS_COUNT];
 static FAST_RAM_ZERO_INIT filterApplyFnPtr ptermYawLowpassApplyFn;
 static FAST_RAM_ZERO_INIT pt1Filter_t ptermYawLowpass;
+
 
 #if defined(USE_ITERM_RELAX)
 static FAST_RAM_ZERO_INIT pt1Filter_t windupLpf[XYZ_AXIS_COUNT];
@@ -644,7 +639,11 @@ static FAST_RAM_ZERO_INIT ffInterpolationType_t ffFromInterpolatedSetpoint;
 #endif
 
 // HF3D
-static FAST_RAM_ZERO_INIT float rescueCollective;
+static FAST_RAM_ZERO_INIT uint16_t rescueCollective;
+uint8_t rescueDelay = 35;   
+static 	FAST_RAM_ZERO_INIT uint16_t 	rescueDelayTarget; 
+static 	FAST_RAM_ZERO_INIT uint16_t 	rescueDelayCurrent = 0;
+static 	bool	rescue_Invert = false;
 
 void pidInitConfig(const pidProfile_t *pidProfile)
 {
@@ -790,7 +789,7 @@ void pidInitConfig(const pidProfile_t *pidProfile)
 
     // HF3D
     rescueCollective = pidProfile->rescue_collective;
-	RescueDelay = pidProfile->Rescue_delay;
+	rescueDelay = pidProfile->rescue_delay;
 }
 
 void pidInit(const pidProfile_t *pidProfile)
@@ -902,16 +901,14 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
         // We are always pitching to "zero" whether up-right or inverted
         //   but the control direction needed to get to up-right is different than inverted
         // Determine if we're closer to up-right or inverted by checking for abs(roll attitude) > 90
-        if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > (90.0f - RescueOffset)) &! Rescue_Invert) {
-            RescueOffset = 5.0f;
+        if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) > (90.0f)) &! rescue_Invert) {
 			// Rolled right closer to inverted, continue to roll right to inverted (+180 degrees)
             if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
                 errorAngle = 180.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             }
-        } else if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < (-90.0f + RescueOffset)) &! Rescue_Invert) {
-			RescueOffset = 5.0f;	
+        } else if ((((attitude.raw[FD_ROLL] - angleTrim->raw[FD_ROLL]) / 10.0f) < (-90.0f)) &! rescue_Invert) {
             // Rolled left closer to inverted, continue to roll left to inverted (-180 degrees)
 			if (axis == FD_PITCH) {
                 errorAngle = 0.0f + ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
@@ -921,7 +918,6 @@ STATIC_UNIT_TESTED float pidLevel(int axis, const pidProfile_t *pidProfile, cons
         } else {
             // We're rolled left or right between -90 and 90, and thus are closer to up-right (0 degrees aka skids down)
 			// If we are inverted and Rescue_Invert active. Pitch will be 0 and roll +-180 so we will roll to upright.....
-            RescueOffset = -5.0f;
 			if (axis == FD_PITCH) {
                 errorAngle = 0.0f - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
             } else if (axis == FD_ROLL) {
@@ -1518,17 +1514,19 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
     // ----------PID controller----------
     for (int axis = FD_ROLL; axis <= FD_YAW; ++axis) {
 
-		if (!FLIGHT_MODE(ANGLE_MODE)||(RescueDelay > 16000)) { //HF3D Non inverted rescue
-			RescueDelayCurrent = 0;
-			Rescue_Invert = 0.0;
-			RescueOffset = 0.0f;
+		if (!FLIGHT_MODE(ANGLE_MODE)||(rescueDelay > 30)) { //HF3D Non inverted rescue. More than 3 seconds disables non inverted rescue
+			rescueDelayCurrent = 0;
+			rescue_Invert = false;
+			rescueDelayTarget = rescueDelay/dT/5 ; // allow for different loop frequencies.... 
+			// Ummm not really sure why 4kHz rate is 500mS but whatever...    
 		} else {
-			RescueDelayCurrent++;
-			if (RescueDelayCurrent >= RescueDelay) {
-				RescueDelayCurrent = RescueDelay;
-				Rescue_Invert = 1.0;				
+			rescueDelayCurrent++;
+			if (rescueDelayCurrent >= rescueDelayTarget) {
+				rescueDelayCurrent = rescueDelayTarget;
+				rescue_Invert = true;				
 			}
 		}
+
         // Get the user's roll rate command on this axis after expo and other rate modifications have been made
         //  Units are deg/s... maximum set in profile, default max rate is 1998 deg/s
         float currentPidSetpoint = getSetpointRate(axis);

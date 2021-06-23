@@ -1006,7 +1006,7 @@ const clivalue_t valueTable[] = {
 
     { "iterm_rotation",             VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_PID_PROFILE, offsetof(pidProfile_t, iterm_rotation) },
 	//HF3D - Non inverted Rescue
-    { "Rescue_delay",               VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 16050 }, PG_PID_PROFILE, offsetof(pidProfile_t, Rescue_delay) },
+    { "rescue_delay",               VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 16050 }, PG_PID_PROFILE, offsetof(pidProfile_t, rescue_delay) },
 
 #if defined(USE_ITERM_RELAX)
     { "iterm_relax",                VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_RELAX }, PG_PID_PROFILE, offsetof(pidProfile_t, iterm_relax) },

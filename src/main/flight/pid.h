@@ -190,8 +190,8 @@ typedef struct pidProfile_s {
     uint8_t error_decay_always;             // Always decay accumulated I term and Abs Control error?
     uint8_t error_decay_rate;               // Rate to decay accumulated error in deg/s
     uint16_t collective_ff_impulse_freq;    // Collective input impulse high-pass filter cutoff frequency
-	uint16_t Rescue_delay;                  // Cycle counts. @8kHz. 8000 counts = 1s delay. Set to 16050 to disable 
-    
+	uint16_t rescue_delay;             		// T/10 before rolling non inverted :if==0, heli will immediately go to upright, 
+											//30==3s inverted rescue before roll to upright: 35==disabe upright. Will just continue.  
     uint16_t elevator_filter_gain;          // Elevator stop de-bounce feedforward filter gain
     uint8_t elevator_filter_window_time;    // Time in ms that we no longer apply de-bounce inside our window
     uint8_t elevator_filter_window_size;    // Size of the de-bounce window around center stick (0 deg/s) in degrees/second
