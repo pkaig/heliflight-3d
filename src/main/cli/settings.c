@@ -1003,10 +1003,7 @@ const clivalue_t valueTable[] = {
     { "crash_recovery_rate",        VAR_UINT8  | PROFILE_VALUE, .config.minmaxUnsigned = { 50, 255 }, PG_PID_PROFILE, offsetof(pidProfile_t, crash_recovery_rate) },
     { "crash_limit_yaw",            VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PID_PROFILE, offsetof(pidProfile_t, crash_limit_yaw) },
     { "crash_recovery",             VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_CRASH_RECOVERY }, PG_PID_PROFILE, offsetof(pidProfile_t, crash_recovery) },
-
     { "iterm_rotation",             VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_PID_PROFILE, offsetof(pidProfile_t, iterm_rotation) },
-	//HF3D - Non inverted Rescue
-    { "rescue_delay",               VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 16050 }, PG_PID_PROFILE, offsetof(pidProfile_t, rescue_delay) },
 
 #if defined(USE_ITERM_RELAX)
     { "iterm_relax",                VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ITERM_RELAX }, PG_PID_PROFILE, offsetof(pidProfile_t, iterm_relax) },
@@ -1104,6 +1101,8 @@ const clivalue_t valueTable[] = {
     { "yaw_cyclic_ff_gain",             VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 1000 },PG_PID_PROFILE, offsetof(pidProfile_t, yawCycKf) },
     { "yaw_base_thrust",                VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 3000 },PG_PID_PROFILE, offsetof(pidProfile_t, yawBaseThrust) },
     { "rescue_collective",              VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 50, 500 },PG_PID_PROFILE, offsetof(pidProfile_t, rescue_collective) },
+    { "rescue_collective_boost",        VAR_UINT8 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 150 },PG_PID_PROFILE, offsetof(pidProfile_t, rescue_collective_boost) },
+    { "rescue_delay",               	VAR_UINT8 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 35 }, PG_PID_PROFILE, offsetof(pidProfile_t, rescue_delay) },
     { "error_decay_always",             VAR_UINT8  | PROFILE_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON }, PG_PID_PROFILE, offsetof(pidProfile_t, error_decay_always) },
     { "error_decay_rate",               VAR_UINT8  | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 45 },PG_PID_PROFILE, offsetof(pidProfile_t, error_decay_rate) },
     { "collective_ff_impulse_freq",     VAR_UINT16 | PROFILE_VALUE, .config.minmaxUnsigned = { 0, 1000 }, PG_PID_PROFILE, offsetof(pidProfile_t, collective_ff_impulse_freq) },

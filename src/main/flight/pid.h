@@ -187,11 +187,12 @@ typedef struct pidProfile_s {
     uint16_t yawCycKf;                      // Feedforward for cyclic into Yaw
     uint16_t yawBaseThrust;                 // Base thrust for the tail
     uint16_t rescue_collective;             // Collective pitch command when rescue is fully upright
+	uint8_t rescue_collective_boost;        // Collective pitch boost until rescue_delay has expired
+	uint8_t rescue_delay;             		// T/10 before rolling non inverted :if==0, heli will immediately go to upright, 
+											// 30==3s inverted rescue before roll to upright: 35==disabe upright. Will just continue.
     uint8_t error_decay_always;             // Always decay accumulated I term and Abs Control error?
     uint8_t error_decay_rate;               // Rate to decay accumulated error in deg/s
     uint16_t collective_ff_impulse_freq;    // Collective input impulse high-pass filter cutoff frequency
-	uint16_t rescue_delay;             		// T/10 before rolling non inverted :if==0, heli will immediately go to upright, 
-											//30==3s inverted rescue before roll to upright: 35==disabe upright. Will just continue.  
     uint16_t elevator_filter_gain;          // Elevator stop de-bounce feedforward filter gain
     uint8_t elevator_filter_window_time;    // Time in ms that we no longer apply de-bounce inside our window
     uint8_t elevator_filter_window_size;    // Size of the de-bounce window around center stick (0 deg/s) in degrees/second

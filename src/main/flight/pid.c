@@ -230,6 +230,8 @@ void resetPidProfile(pidProfile_t *pidProfile)
         .yawCycKf = 0,
         .yawBaseThrust = 900,
         .rescue_collective = 200,
+		.rescue_collective_boost = 50,
+		.rescue_delay = 35,          				// Non Inverted rescue: disabled by default
         .error_decay_always = 0,
         .error_decay_rate = 7,
         .collective_ff_impulse_freq = 100,
@@ -237,7 +239,6 @@ void resetPidProfile(pidProfile_t *pidProfile)
         .elevator_filter_window_time = 75,
         .elevator_filter_window_size = 30,
         .elevator_filter_hz = 15,
-		.rescue_delay = 35,          // Non Inverted rescue: disabled by default
     );
 #ifndef USE_D_MIN
     pidProfile->pid[PID_ROLL].D = 30;
@@ -640,6 +641,7 @@ static FAST_RAM_ZERO_INIT ffInterpolationType_t ffFromInterpolatedSetpoint;
 
 // HF3D
 static FAST_RAM_ZERO_INIT uint16_t rescueCollective;
+static FAST_RAM_ZERO_INIT uint16_t rescueCollectiveBoost;
 uint8_t rescueDelay = 35;   
 static 	FAST_RAM_ZERO_INIT uint16_t 	rescueDelayTarget; 
 static 	FAST_RAM_ZERO_INIT uint16_t 	rescueDelayCurrent = 0;
@@ -789,6 +791,7 @@ void pidInitConfig(const pidProfile_t *pidProfile)
 
     // HF3D
     rescueCollective = pidProfile->rescue_collective;
+	rescueCollectiveBoost = pidProfile->rescue_collective_boost;
 	rescueDelay = pidProfile->rescue_delay;
 }
 
@@ -1537,7 +1540,7 @@ void FAST_CODE pidController(const pidProfile_t *pidProfile, timeUs_t currentTim
 #if defined(USE_ACC)
         if (levelModeActive && (axis != FD_YAW)) {
             currentPidSetpoint = pidLevel(axis, pidProfile, angleTrim, currentPidSetpoint);
-        } else if (FLIGHT_MODE(ANGLE_MODE) && (axis == FD_YAW)) {
+        } else if (FLIGHT_MODE(ANGLE_MODE) && (axis == FD_YAW) && (!rescue_Invert)) {
             // HF3D:  Don't allow user to give yaw input while rescue (angle) mode corrections are occuring
             currentPidSetpoint = 0.0f;
         }
@@ -1988,7 +1991,11 @@ float pidGetCollectiveStickHPF()
 
 uint16_t pidGetRescueCollectiveSetting()
 {
-    return rescueCollective;
+    if (rescue_Invert) {
+		return rescueCollective ;
+	} else {	
+		return constrain( rescueCollective + rescueCollectiveBoost, 50, 500) ;
+	}
 }
 
 float pidGetCollectivePulseFilterGain(void)
